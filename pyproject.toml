@@ -1,0 +1,16 @@
+[project]
+name = "ipavoice"
+version = "0.1.0"
+description = "UCLA Phonetics Lab Archive scraper for IPA-to-speech training data"
+requires-python = ">=3.10"
+license = "CC-BY-NC-2.0"
+dependencies = [
+    "requests",
+    "beautifulsoup4",
+    "lxml",
+    "pydub",
+    "tqdm",
+]
+
+[project.scripts]
+ipavoice = "scraper.run:main"
