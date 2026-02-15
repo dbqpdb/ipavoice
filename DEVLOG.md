@@ -103,6 +103,56 @@ Created an optimized segmenter with 4 improvements over v1, benchmarked on ARZ (
 **Trade-off:** ffmpeg backend is significantly faster but produces ~17% fewer segments for the tested language. Pydub backend with multiprocessing is the best balance of speed and accuracy.
 
 ### Next steps
-- [ ] Wire `segmenter_v2` into the CLI (`run.py` still uses v1)
-- [ ] Run `export` to generate JSON training manifest for all 170K segments
-- [ ] Investigate the 7 recordings with 0 entries (missing word list HTML)
+- [x] Wire `segmenter_v2` into the CLI (`run.py` still uses v1)
+- [x] Run `export` to generate JSON training manifest for all 170K segments
+- [x] Investigate the 7 recordings with 0 entries (missing word list HTML)
+
+---
+
+## 2026-02-14: Pipeline polish + model selection
+
+### Completed
+- **Segmenter v2 promoted** — replaced v1 with v2 as `processing/segmenter.py`. Added `--workers`, `--ffmpeg`, `--force` CLI flags.
+- **Export** — generated `data/manifest.json`: 205,408 entries (162,928 with segment audio, 42,480 with full-recording fallback).
+- **Missing entries investigation** — 3 root causes identified:
+  - AMH: wrong URL scraped (points to conversation page, 404s)
+  - AQC, RUN×2, PAV: no word list HTML exists on the archive
+  - HYE×2: malformed HTML (4 headers, 2 `<td>` cells per row — entry+ortho and IPA+english merged)
+- **HYE parser fix** — added `_parse_merged_row()` fallback for merged-cell tables. 106 new entries, 105 new segments.
+- **Parser tests** — verified all column variants: 3-col (ABQ), 4-col+sound (CMN), 4-col+ortho (ABK), 5-col (AER, APE), merged (HYE).
+- **Parallel downloads** — `ThreadPoolExecutor` with per-thread sessions and SQLite connections. Usage: `--workers N`.
+
+### Model architecture decision: VITS
+
+**Goal:** Build a universal IPA-to-speech synthesizer. Given an arbitrary IPA string, generate audio that produces recognizable phonetic output. Not expecting natural speech quality given the data diversity, but aiming for broad phonetic coverage across the IPA inventory.
+
+**Dataset characteristics that drive the choice:**
+- 170K audio segments from 307 languages
+- IPA transcriptions as input (not orthographic text)
+- Unknown, unlabeled speakers — only language code available as grouping
+- Highly varied recording conditions (1960s–2000s, different equipment)
+- Moderate dataset size (too small for large transformer models, right-sized for VAE-based)
+
+**Why VITS over alternatives:**
+
+| Model | Pros | Cons for this use case |
+|-------|------|----------------------|
+| **VITS** | Phoneme-native input; end-to-end (no separate vocoder); VAE handles data diversity; multi-speaker via embeddings; trains well at 170K scale | — |
+| Matcha-TTS | Flow matching may train more stably | Less battle-tested for multilingual; fewer reference implementations |
+| Tacotron 2 + HiFi-GAN | Well understood | Autoregressive attention unstable with 307 languages of speaker variation; two-stage pipeline |
+| Bark / SpeechT5 | Very capable | Need significantly more data and compute; designed for text not IPA |
+
+**Key VITS properties that fit:**
+1. **Phoneme input** — VITS natively takes phoneme sequences. IPA *is* a phoneme representation, so no grapheme-to-phoneme conversion needed. We tokenize IPA at the character level.
+2. **End-to-end** — single model learns alignment, acoustic features, and waveform generation jointly. Simpler pipeline, fewer failure modes.
+3. **Variational autoencoder** — the VAE latent space absorbs speaker/recording variation, letting the model learn phoneme-to-sound mappings that generalize across speakers.
+4. **Multi-speaker conditioning** — we'll use language code as a pseudo-speaker label. This gives the model 307 conditioning signals to help disentangle linguistic content from speaker identity.
+5. **Scale match** — VITS trains well on datasets of this size (~170K utterances). Larger models (Bark) need millions; smaller datasets would underfit.
+
+**Implementation plan:** Coqui TTS library (`TTS` package) — has a well-tested VITS implementation with multi-speaker support and configurable phoneme tokenization.
+
+### Next steps
+- [ ] Audio preprocessing (resample to 22050 Hz mono, normalize loudness)
+- [ ] IPA tokenizer (character-level with combining diacritics, affricates, tone marks)
+- [ ] Train/val/test split
+- [ ] VITS training configuration and pipeline

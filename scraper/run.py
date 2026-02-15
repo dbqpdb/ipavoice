@@ -1,10 +1,12 @@
 """CLI entry point for the UCLA Phonetics Archive scraper.
 
 Usage:
-    python -m scraper.run metadata [--language CODE]
-    python -m scraper.run download [--language CODE] [--delay SECONDS] [--workers N]
-    python -m scraper.run segment  [--language CODE]
-    python -m scraper.run export   [--language CODE] [--output FILE]
+    python -m scraper.run metadata    [--language CODE]
+    python -m scraper.run download    [--language CODE] [--delay SECONDS] [--workers N]
+    python -m scraper.run segment     [--language CODE]
+    python -m scraper.run export      [--language CODE] [--output FILE]
+    python -m scraper.run preprocess  [--workers N]
+    python -m scraper.run train       [--test-run] [--resume PATH]
 """
 
 from __future__ import annotations
@@ -34,6 +36,8 @@ from scraper.language_parser import RecordingInfo, parse_language_page
 from scraper.wordlist_parser import WordEntry, parse_wordlist
 from scraper.downloader import download_recordings
 from processing.segmenter import segment_all
+from training.preprocess import run_preprocessing
+from training.train import train as run_training
 
 
 def cmd_metadata(args: argparse.Namespace) -> None:
@@ -204,6 +208,23 @@ def cmd_export(args: argparse.Namespace) -> None:
     conn.close()
 
 
+def cmd_preprocess(args: argparse.Namespace) -> None:
+    """Preprocess audio and build training dataset."""
+    run_preprocessing(workers=args.workers or None)
+
+
+def cmd_train(args: argparse.Namespace) -> None:
+    """Train VITS model."""
+    run_training(
+        test_run=args.test_run,
+        resume_path=args.resume,
+        batch_size=args.batch_size,
+        eval_batch_size=args.eval_batch_size,
+        mixed_precision=args.mixed_precision,
+        num_loader_workers=args.workers,
+    )
+
+
 def main() -> None:
     parser: argparse.ArgumentParser = argparse.ArgumentParser(
         description="UCLA Phonetics Archive scraper for IPA-to-speech training data"
@@ -239,6 +260,21 @@ def main() -> None:
     p_exp.add_argument("--language", type=str, help="Limit to a specific language code")
     p_exp.add_argument("--output", type=str, help="Output file path (default: data/manifest.json)")
 
+    # preprocess
+    p_pre: argparse.ArgumentParser = sub.add_parser(
+        "preprocess", help="Preprocess audio and build training dataset"
+    )
+    p_pre.add_argument("--workers", type=int, default=0, help="Parallel workers (default: cpu_count-1)")
+
+    # train
+    p_train: argparse.ArgumentParser = sub.add_parser("train", help="Train VITS model")
+    p_train.add_argument("--test-run", action="store_true", help="Run 1000 steps to validate pipeline")
+    p_train.add_argument("--resume", type=str, help="Path to checkpoint to resume from")
+    p_train.add_argument("--batch-size", type=int, default=32, help="Training batch size (default: 32)")
+    p_train.add_argument("--eval-batch-size", type=int, default=16, help="Eval batch size (default: 16)")
+    p_train.add_argument("--mixed-precision", action="store_true", help="Enable mixed precision training")
+    p_train.add_argument("--workers", type=int, default=4, help="DataLoader workers (default: 4)")
+
     args: argparse.Namespace = parser.parse_args()
 
     commands: dict[str, Callable[[argparse.Namespace], None]] = {
@@ -246,6 +282,8 @@ def main() -> None:
         "download": cmd_download,
         "segment": cmd_segment,
         "export": cmd_export,
+        "preprocess": cmd_preprocess,
+        "train": cmd_train,
     }
     commands[args.command](args)
 
