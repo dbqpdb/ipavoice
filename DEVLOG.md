@@ -152,7 +152,60 @@ Created an optimized segmenter with 4 improvements over v1, benchmarked on ARZ (
 **Implementation plan:** Coqui TTS library (`TTS` package) — has a well-tested VITS implementation with multi-speaker support and configurable phoneme tokenization.
 
 ### Next steps
-- [ ] Audio preprocessing (resample to 22050 Hz mono, normalize loudness)
-- [ ] IPA tokenizer (character-level with combining diacritics, affricates, tone marks)
-- [ ] Train/val/test split
-- [ ] VITS training configuration and pipeline
+- [x] Audio preprocessing (resample to 22050 Hz mono, normalize loudness)
+- [x] IPA tokenizer (character-level with combining diacritics, affricates, tone marks)
+- [x] Train/val/test split
+- [x] VITS training configuration and pipeline
+
+---
+
+## 2026-02-17: Training milestone — 3M steps
+
+**Checkpoint:** `ipavoice_vits-February-17-2026_04+05PM-5505364/checkpoint_3060000.pth`
+
+Highest step count reached in initial training run. Model trained on full dataset with `min_text_len: 1`.
+
+---
+
+## 2026-03-02: Config tweak — filter short entries
+
+**Change:** Increased `min_text_len` from 1 to 3.
+
+**Rationale:** Filter out single/double character IPA entries that may be noisy or unhelpful for training (isolated diacritics, incomplete transcriptions).
+
+**Action:** Started new training run initialized from 3.06M checkpoint weights. Step counter reset to 0 in new output directory.
+
+**Run directory:** `ipavoice_vits-March-02-2026_01+14PM-5505364/`
+
+**Last checkpoint before hiatus:** `checkpoint_140000.pth` (effective ~3.2M total steps)
+
+---
+
+## 2026-05-05: Resume training after hiatus
+
+**Context:** Project on ice since early March. Resumed training today.
+
+**Training state:**
+- Resumed from: `ipavoice_vits-March-02-2026_01+14PM-5505364/checkpoint_140000.pth`
+- Effective training: ~3.2M steps (3.06M from Feb run + 140K from March run)
+- GPU: RTX 4080 Laptop (12GB VRAM)
+- Settings: `--mixed-precision --batch-size 4`
+
+**Note on checkpoint numbering:** The March run loaded weights from the 3M checkpoint but reset the step counter. So `checkpoint_140000.pth` in the March directory represents a model with ~3.2M effective training steps.
+
+### Reference: Training commands
+
+```bash
+# Resume from latest checkpoint with mixed precision
+PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True uv run python -m training.train \
+  --resume "$(printf '%s\n' data/vits_output/ipavoice_vits-*/checkpoint_*.pth | sed 's/.*checkpoint_\([0-9]*\)\.pth/\1 &/' | sort -n | tail -1 | cut -d' ' -f2)" \
+  --mixed-precision --batch-size 4
+
+# Test run (1000 steps)
+uv run python -m training.train --test-run
+```
+
+### Reference: Memory management
+- `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` prevents OOM on 12GB cards
+- Batch size 4 is safe for 12GB VRAM with variable-length audio
+- Mixed precision (`--mixed-precision`) halves memory usage
