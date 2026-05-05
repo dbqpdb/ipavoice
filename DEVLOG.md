@@ -244,3 +244,52 @@ Generated comprehensive coverage report: `docs/TRAINING_DATA_REPORT.md`
 **Rare tokens:** 345 hapax legomena, 1,083 tokens with ≤10 occurrences. These cannot be learned reliably.
 
 **Language coverage:** 98 languages have <50 entries — insufficient for reliable synthesis.
+
+### Synthesis tooling
+
+Added `ipavoice.synthesize` CLI for inference with postprocessing:
+
+```bash
+uv run python -m ipavoice.synthesize "həˈloʊ" -o hello.wav
+uv run python -m ipavoice.synthesize "bɔ̃ʒuʁ" --lang-style FRA -o bonjour.wav
+uv run python -m ipavoice.synthesize "həˈloʊ" --pitch-range female --reverb 0.2 --normalize
+```
+
+**Postprocessing options:**
+- `--pitch-range`: male/female/child or Hz range (e.g., 100-200)
+- `--pitch-shift`: Semitones
+- `--reverb`: Wet/dry mix 0.0-1.0
+- `--normalize`: Peak level in dB
+
+**Note on "lang_style":** The model uses language codes as speaker embeddings. Selecting a language style affects phonetic realization based on patterns learned from that language's training data.
+
+### Training monitoring
+
+Added `scripts/monitor_training.py` for automated monitoring:
+
+```bash
+uv run python scripts/monitor_training.py
+```
+
+**Outputs to `data/monitoring/{run_name}/`:**
+- Loss plots (PNG)
+- Test samples (WAV) covering diverse IPA: German, Zulu clicks, Thai tones, Apache ejectives, French nasals, English
+- JSON reports with metrics and plateau detection
+
+**Test sentences:**
+| ID | IPA | Tests |
+|----|-----|-------|
+| german | ˈʃtʁaːsə ˈbɛɐ̯lɪn | Uvular R, long vowels |
+| clicks | ǀʰõã ǃʼũ ǁʰa | Click consonants |
+| thai | tʰaɪ̯ pʰə̀ʔ kʰǎːw | Aspirates, tones |
+| ejectives | kʼatʼɬʼi qʷʼəχʷ | Ejectives, laterals |
+| french | bɔ̃ʒuʁ mɔ̃d | Nasalized vowels |
+| english | həˈloʊ ˈwɜːld | Baseline |
+
+### Project reorganization
+
+CLI entry points moved to `ipavoice/` package:
+- `python -m ipavoice.train` — training
+- `python -m ipavoice.synthesize` — inference
+
+Training config remains in `training/config.py`.
