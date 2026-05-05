@@ -80,3 +80,28 @@ uv run python -m training.train --test-run
 ```
 
 **Local GPU (RTX 2080 Ti, 12GB VRAM):** Use `--batch-size 4` with `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` to avoid OOM. Variable-length audio samples cause memory spikes that crash larger batch sizes.
+
+## Synthesis
+
+```bash
+# Basic synthesis
+uv run python -m training.synthesize "həˈloʊ" -o hello.wav
+
+# With language style (affects phonetic realization)
+uv run python -m training.synthesize "bɔ̃ʒuʁ" --lang-style FRA -o bonjour.wav
+
+# With postprocessing
+uv run python -m training.synthesize "həˈloʊ" --pitch-range female --reverb 0.2 --normalize
+
+# Custom pitch range in Hz
+uv run python -m training.synthesize "həˈloʊ" --pitch-range 100-200 -o deep_voice.wav
+
+# List available language styles
+uv run python -m training.synthesize --list-styles
+```
+
+**Postprocessing options:**
+- `--pitch-range`: male/female/child or Hz range (e.g., 100-200)
+- `--pitch-shift`: Semitones (positive = higher)
+- `--reverb`: Wet/dry mix 0.0-1.0
+- `--normalize`: Peak level in dB (default: -3)
