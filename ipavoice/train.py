@@ -1,10 +1,10 @@
 """VITS training entry point.
 
 Usage:
-    python -m training.train                     # full training
-    python -m training.train --test-run          # 1000 steps to validate pipeline
-    python -m training.train --resume PATH       # resume from checkpoint
-    python -m training.train --batch-size 16     # custom batch size
+    python -m ipavoice.train                     # full training
+    python -m ipavoice.train --test-run          # 1000 steps to validate pipeline
+    python -m ipavoice.train --resume PATH       # resume from checkpoint
+    python -m ipavoice.train --batch-size 16     # custom batch size
 """
 
 from __future__ import annotations

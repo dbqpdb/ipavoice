@@ -2,22 +2,22 @@
 
 Usage:
     # Synthesize IPA to WAV file
-    python -m training.synthesize "həˈloʊ" -o hello.wav
+    python -m ipavoice.synthesize "həˈloʊ" -o hello.wav
 
     # Use specific language style (affects accent/phonetic realization)
-    python -m training.synthesize "bɔ̃ʒuʁ" --lang-style FRA -o bonjour.wav
+    python -m ipavoice.synthesize "bɔ̃ʒuʁ" --lang-style FRA -o bonjour.wav
 
     # Postprocessing: pitch range, reverb, normalize
-    python -m training.synthesize "həˈloʊ" --pitch-range female --reverb 0.3 --normalize
+    python -m ipavoice.synthesize "həˈloʊ" --pitch-range female --reverb 0.3 --normalize
 
-    # Custom pitch target in Hz
-    python -m training.synthesize "həˈloʊ" --pitch-range 200
+    # Custom pitch range in Hz
+    python -m ipavoice.synthesize "həˈloʊ" --pitch-range 100-200
 
     # List available language styles
-    python -m training.synthesize --list-styles
+    python -m ipavoice.synthesize --list-styles
 
     # Use specific checkpoint
-    python -m training.synthesize "test" --checkpoint path/to/checkpoint.pth
+    python -m ipavoice.synthesize "test" --checkpoint path/to/checkpoint.pth
 """
 
 from __future__ import annotations

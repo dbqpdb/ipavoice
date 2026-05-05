@@ -73,31 +73,31 @@ VITS model training uses Coqui TTS. Commands:
 
 ```bash
 # Resume from highest step checkpoint with mixed precision
-PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True uv run python -m training.train --resume "$(printf '%s\n' data/vits_output/ipavoice_vits-*/checkpoint_*.pth | sed 's/.*checkpoint_\([0-9]*\)\.pth/\1 &/' | sort -n | tail -1 | cut -d' ' -f2)" --mixed-precision --batch-size 4
+PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True uv run python -m ipavoice.train --resume "$(printf '%s\n' data/vits_output/ipavoice_vits-*/checkpoint_*.pth | sed 's/.*checkpoint_\([0-9]*\)\.pth/\1 &/' | sort -n | tail -1 | cut -d' ' -f2)" --mixed-precision --batch-size 4
 
 # Test run (1000 steps)
-uv run python -m training.train --test-run
+uv run python -m ipavoice.train --test-run
 ```
 
-**Local GPU (RTX 2080 Ti, 12GB VRAM):** Use `--batch-size 4` with `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` to avoid OOM. Variable-length audio samples cause memory spikes that crash larger batch sizes.
+**Local GPU (RTX 4080 Laptop, 12GB VRAM):** Use `--batch-size 4` with `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` to avoid OOM. Variable-length audio samples cause memory spikes that crash larger batch sizes.
 
 ## Synthesis
 
 ```bash
 # Basic synthesis
-uv run python -m training.synthesize "həˈloʊ" -o hello.wav
+uv run python -m ipavoice.synthesize "həˈloʊ" -o hello.wav
 
 # With language style (affects phonetic realization)
-uv run python -m training.synthesize "bɔ̃ʒuʁ" --lang-style FRA -o bonjour.wav
+uv run python -m ipavoice.synthesize "bɔ̃ʒuʁ" --lang-style FRA -o bonjour.wav
 
 # With postprocessing
-uv run python -m training.synthesize "həˈloʊ" --pitch-range female --reverb 0.2 --normalize
+uv run python -m ipavoice.synthesize "həˈloʊ" --pitch-range female --reverb 0.2 --normalize
 
 # Custom pitch range in Hz
-uv run python -m training.synthesize "həˈloʊ" --pitch-range 100-200 -o deep_voice.wav
+uv run python -m ipavoice.synthesize "həˈloʊ" --pitch-range 100-200 -o deep_voice.wav
 
 # List available language styles
-uv run python -m training.synthesize --list-styles
+uv run python -m ipavoice.synthesize --list-styles
 ```
 
 **Postprocessing options:**
