@@ -14,6 +14,8 @@ project, we should optimize code to run as quickly as possible, caching data,
 vectorizing operations, etc. when appropriate. We should retain a full paper
 trail of what we've done as we go, saving scripts and analyses to files.
 
+In Git commits, do not include a co-author section.
+
 ## Commands
 
 ```bash
@@ -64,3 +66,17 @@ Four tables with foreign key chain: **languages** → **recordings** → **entri
 - Dependencies managed with uv; `pyproject.toml` is the single source of truth
 - Data files are gitignored under `data/`; SQLite DB lives at `data/db/ipavoice.db`
 - Rate limiting and `User-Agent: IPAVoice-Scraper/1.0` on all HTTP requests
+
+## Training
+
+VITS model training uses Coqui TTS. Commands:
+
+```bash
+# Resume from highest step checkpoint with mixed precision
+PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True uv run python -m training.train --resume "$(printf '%s\n' data/vits_output/ipavoice_vits-*/checkpoint_*.pth | sed 's/.*checkpoint_\([0-9]*\)\.pth/\1 &/' | sort -n | tail -1 | cut -d' ' -f2)" --mixed-precision --batch-size 4
+
+# Test run (1000 steps)
+uv run python -m training.train --test-run
+```
+
+**Local GPU (RTX 2080 Ti, 12GB VRAM):** Use `--batch-size 4` with `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` to avoid OOM. Variable-length audio samples cause memory spikes that crash larger batch sizes.

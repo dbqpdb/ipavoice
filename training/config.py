@@ -155,6 +155,7 @@ def build_config(
         print_step=50,
         print_eval=True,
         mixed_precision=mixed_precision,
+        min_text_len=3,  # Filter out ultra-short IPA sequences that crash SDP
         output_path=str(OUTPUT_DIR),
         datasets=[dataset_config],
         characters=characters_config,
