@@ -209,3 +209,38 @@ uv run python -m training.train --test-run
 - `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` prevents OOM on 12GB cards
 - Batch size 4 is safe for 12GB VRAM with variable-length audio
 - Mixed precision (`--mixed-precision`) halves memory usage
+
+### Training data analysis
+
+Generated comprehensive coverage report: `docs/TRAINING_DATA_REPORT.md`
+
+**Summary statistics:**
+- 205,408 audio entries
+- 1,194,911 IPA tokens
+- 1,855 unique tokens
+- 291 languages
+
+**Coverage by sound class:**
+
+| Category | Tokens | Coverage |
+|----------|--------|----------|
+| Vowels (oral) | 496K | Excellent |
+| Plosives | 245K | Excellent |
+| Fricatives | 125K | Excellent |
+| Nasals | 107K | Excellent |
+| Laterals | 41K | Excellent |
+| Approximants | 29K | Excellent |
+| Trills | 26K | Excellent |
+| Ejectives | 13K | Excellent |
+| Clicks | 11K | Excellent |
+| Vowels (nasalized) | 10K | Good |
+| Taps/flaps | 3K | Good |
+| Implosives | 2K | Good |
+| Affricates | 1.5K | Good |
+| **Tones** | **690** | **Limited** |
+
+**Key limitation:** Tone data is severely underrepresented. The model will likely struggle with tonal languages despite good segmental coverage.
+
+**Rare tokens:** 345 hapax legomena, 1,083 tokens with ≤10 occurrences. These cannot be learned reliably.
+
+**Language coverage:** 98 languages have <50 entries — insufficient for reliable synthesis.
