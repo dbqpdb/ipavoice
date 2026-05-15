@@ -6,6 +6,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 IPA Voice scrapes the UCLA Phonetics Lab Archive (<https://archive.phonetics.ucla.edu>) to build IPA-to-speech training data. It extracts IPA transcriptions and audio from ~307 languages, segments word-list recordings into per-word WAV files, and exports a JSON manifest for ML training. Licensed CC BY-NC 2.0 matching the archive.
 
+## Status: Archived Corpus
+
+**This dataset has known data quality limitations and is not recommended for TTS training.**
+
+Training experiments (Feb–May 2026) revealed that ~48% of audio segments are misaligned with their IPA transcriptions due to:
+- Silence-based segmentation failing on field recordings with background noise
+- Word lists embedded in carrier phrases ("This recording is made...")
+- Inconsistent recording quality across 1960s–2000s equipment
+
+The trained model memorized specific examples rather than learning generalizable phoneme→sound mappings. See `DEVLOG.md` (2026-05-14 entry) for full analysis.
+
+**Recommended alternative:** Mozilla Common Voice Spontaneous Speech corpus with Allosaurus phone recognition — see `~/gordo/Corpora/CommonVoiceSpontaneous/`.
+
+**This corpus remains useful for:**
+- Phonetic research requiring broad language coverage (307 languages)
+- Studies of historical field recordings
+- Language identification or classification tasks
+- Any task not requiring precise audio-transcription alignment
+
 ## Style
 
 We should always prioritize accuracy and correctness over all other

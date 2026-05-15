@@ -293,3 +293,92 @@ CLI entry points moved to `ipavoice/` package:
 - `python -m ipavoice.synthesize` — inference
 
 Training config remains in `training/config.py`.
+
+---
+
+## 2026-05-11 to 2026-05-14: Data Quality Investigation & Corpus Pivot
+
+### Training experiments
+
+Continued training on filtered UCLA data (89K well-aligned samples). Reached 1M+ steps with losses converging to expected ranges:
+- `loss_mel`: ~21-22
+- `loss_gen`: ~2.5-2.7
+- `loss_disc`: ~2.0-2.3
+
+### Critical finding: Audio-transcription misalignment
+
+Generated test samples and compared synthesized output to input IPA transcriptions. Results:
+
+| Input IPA | Expected | Actual Output |
+|-----------|----------|---------------|
+| həˈloʊ ˈwɜːld | "hello world" | Only "hello", truncated |
+| aˈkə (ABK) | Abkhaz "one" | "thith" - wrong |
+| ˈpʰasn̩ (DEU) | German "to suit" | Partially correct |
+| isiɬaɬa (ZUL) | Zulu "tree" | "ɬaɬa" only, missing "isi" |
+| bɔ̃ʒuʁ (FRA) | French "bonjour" | Kazoo-like noise |
+| kʼatʼɬʼi (APW) | Apache ejectives | Wrong |
+
+### Root cause analysis
+
+1. **Space not in vocabulary** — Multi-word inputs fail silently (space is discarded during tokenization).
+
+2. **Audio segment misalignment** — Duration analysis revealed ~48% of segments have audio duration that doesn't match expected IPA length:
+   - "aˈkə" (4 chars) paired with 2.4 seconds of audio (should be ~400ms)
+   - "adz" (3 chars) paired with 11 seconds of audio
+   - Many segments contain introductory phrases like "This recording is made..."
+
+3. **Silence-based segmentation failure** — The adaptive segmenter couldn't reliably isolate individual words from:
+   - Recordings with background noise
+   - Continuous speech without clear pauses
+   - Word lists with introductory framing sentences
+
+4. **Limited per-language coverage** — After filtering:
+   - ENG: 77 samples (insufficient)
+   - ABK: 73 samples (insufficient)
+   - DEU: 242 samples (marginal)
+   - ZUL: 914 samples (partial success explained by memorization)
+
+5. **Memorization vs generalization** — The one partial success (Zulu "isiɬaɬa") was literally the first entry in the training data for that language. Model memorized examples rather than learning phoneme→sound mappings.
+
+### Filtered dataset attempt
+
+Created `data/manifest_filtered.json` with duration-based filtering:
+- Original: 205,408 entries
+- Filtered: 101,318 entries (49.3%)
+- Matched to preprocessed wavs: 89,604 entries
+
+Rejection breakdown:
+- `too_long`: 57,331 (audio much longer than expected for IPA length)
+- `too_short`: 35,083 (audio too short)
+- `ipa_too_short`: 9,875 (< 3 characters)
+- `audio_error`: 1,649
+
+Even after filtering, the model failed to generalize — the underlying alignment quality remained poor.
+
+### Conclusion
+
+The UCLA Phonetics Lab Archive is **not suitable for training a general-purpose IPA synthesizer** due to:
+1. Field recordings with inconsistent quality (1960s–2000s equipment)
+2. No phoneme-level alignment — only word-level transcriptions with unreliable audio boundaries
+3. Word lists embedded in carrier phrases that the segmenter couldn't reliably isolate
+4. Limited coverage per language for most of the 307 languages
+
+### Decision: Pivot to Common Voice Spontaneous Speech
+
+Identified Mozilla Common Voice Spontaneous Speech v3.0 as a better alternative:
+- 87,221 clips across 72 locales
+- Dual IPA channels: text G2P + Allosaurus audio phone recognition
+- Normalized to consistent 229-phone inventory
+- 0.37% drop rate on normalization (very clean)
+- 97.5% have verified audio phoneme recognition
+
+Repository: `~/gordo/Corpora/CommonVoiceSpontaneous/`
+
+### UCLA corpus archived
+
+The UCLA Phonetics Lab Archive scraper and dataset remain available for potential future use cases:
+- Phonetic research requiring broad language coverage
+- Studies of historical field recordings
+- Training data for tasks less sensitive to alignment (e.g., language identification)
+
+**Not recommended for:** TTS training, phoneme-to-speech synthesis, or any task requiring precise audio-transcription alignment.
