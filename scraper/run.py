@@ -7,6 +7,11 @@ Usage:
     python -m scraper.run export      [--language CODE] [--output FILE]
     python -m scraper.run preprocess  [--workers N]
     python -m scraper.run train       [--test-run] [--resume PATH]
+
+MFA alignment pipeline:
+    python -m scraper.run mfa-prepare   [--workers N]
+    python -m scraper.run mfa-align     [--jobs N] [--retrain]
+    python -m scraper.run mfa-extract   [--workers N]
 """
 
 from __future__ import annotations
@@ -37,7 +42,12 @@ from scraper.wordlist_parser import WordEntry, parse_wordlist
 from scraper.downloader import download_recordings
 from processing.segmenter import segment_all
 from training.preprocess import run_preprocessing
-from training.train import train as run_training
+from training.preprocess_cv import run_cv_preprocessing
+from training.mfa_corpus import run_mfa_preparation
+from training.mfa_align import run_mfa_alignment
+from training.extract_durations import run_duration_extraction
+from ipavoice.train import train as run_training
+from training.config import DATASET_UCLA, VALID_DATASETS
 
 
 def cmd_metadata(args: argparse.Namespace) -> None:
@@ -213,6 +223,15 @@ def cmd_preprocess(args: argparse.Namespace) -> None:
     run_preprocessing(workers=args.workers or None)
 
 
+def cmd_preprocess_cv(args: argparse.Namespace) -> None:
+    """Preprocess Common Voice Spontaneous Speech dataset."""
+    run_cv_preprocessing(
+        cv_parquet=args.cv_parquet,
+        cv_base_dir=args.cv_base,
+        workers=args.workers or None,
+    )
+
+
 def cmd_train(args: argparse.Namespace) -> None:
     """Train VITS model."""
     run_training(
@@ -222,6 +241,29 @@ def cmd_train(args: argparse.Namespace) -> None:
         eval_batch_size=args.eval_batch_size,
         mixed_precision=args.mixed_precision,
         num_loader_workers=args.workers,
+        dataset=args.dataset,
+    )
+
+
+def cmd_mfa_prepare(args: argparse.Namespace) -> None:
+    """Prepare MFA corpus structure and phone dictionary."""
+    run_mfa_preparation(workers=args.workers or None)
+
+
+def cmd_mfa_align(args: argparse.Namespace) -> None:
+    """Run MFA alignment to generate TextGrids with phone boundaries."""
+    run_mfa_alignment(
+        num_jobs=args.jobs or None,
+        retrain=args.retrain,
+    )
+
+
+def cmd_mfa_extract(args: argparse.Namespace) -> None:
+    """Extract phone durations from MFA TextGrid alignments."""
+    run_duration_extraction(
+        workers=args.workers or None,
+        update_metadata=not args.no_update,
+        validate=not args.no_validate,
     )
 
 
@@ -266,6 +308,20 @@ def main() -> None:
     )
     p_pre.add_argument("--workers", type=int, default=0, help="Parallel workers (default: cpu_count-1)")
 
+    # preprocess-cv
+    p_pre_cv: argparse.ArgumentParser = sub.add_parser(
+        "preprocess-cv", help="Preprocess Common Voice Spontaneous Speech dataset"
+    )
+    p_pre_cv.add_argument(
+        "--cv-parquet", type=str, required=True,
+        help="Path to unified.parquet file from Common Voice Spontaneous corpus"
+    )
+    p_pre_cv.add_argument(
+        "--cv-base", type=str, default=None,
+        help="Path to CommonVoiceSpontaneous directory (inferred from parquet path if not set)"
+    )
+    p_pre_cv.add_argument("--workers", type=int, default=0, help="Parallel workers (default: cpu_count-1)")
+
     # train
     p_train: argparse.ArgumentParser = sub.add_parser("train", help="Train VITS model")
     p_train.add_argument("--test-run", action="store_true", help="Run 1000 steps to validate pipeline")
@@ -274,6 +330,31 @@ def main() -> None:
     p_train.add_argument("--eval-batch-size", type=int, default=16, help="Eval batch size (default: 16)")
     p_train.add_argument("--mixed-precision", action="store_true", help="Enable mixed precision training")
     p_train.add_argument("--workers", type=int, default=4, help="DataLoader workers (default: 4)")
+    p_train.add_argument(
+        "--dataset", type=str, default=DATASET_UCLA, choices=VALID_DATASETS,
+        help=f"Dataset source: {', '.join(VALID_DATASETS)} (default: {DATASET_UCLA})"
+    )
+
+    # mfa-prepare
+    p_mfa_prep: argparse.ArgumentParser = sub.add_parser(
+        "mfa-prepare", help="Prepare MFA corpus structure and phone dictionary"
+    )
+    p_mfa_prep.add_argument("--workers", type=int, default=0, help="Parallel workers (default: cpu_count-1)")
+
+    # mfa-align
+    p_mfa_align: argparse.ArgumentParser = sub.add_parser(
+        "mfa-align", help="Run MFA alignment to generate TextGrids"
+    )
+    p_mfa_align.add_argument("--jobs", type=int, default=0, help="MFA parallel jobs (default: auto)")
+    p_mfa_align.add_argument("--retrain", action="store_true", help="Force retraining even if model exists")
+
+    # mfa-extract
+    p_mfa_ext: argparse.ArgumentParser = sub.add_parser(
+        "mfa-extract", help="Extract phone durations from MFA TextGrids"
+    )
+    p_mfa_ext.add_argument("--workers", type=int, default=0, help="Parallel workers (default: cpu_count-1)")
+    p_mfa_ext.add_argument("--no-update", action="store_true", help="Don't update metadata CSVs")
+    p_mfa_ext.add_argument("--no-validate", action="store_true", help="Don't validate phone counts")
 
     args: argparse.Namespace = parser.parse_args()
 
@@ -283,7 +364,11 @@ def main() -> None:
         "segment": cmd_segment,
         "export": cmd_export,
         "preprocess": cmd_preprocess,
+        "preprocess-cv": cmd_preprocess_cv,
         "train": cmd_train,
+        "mfa-prepare": cmd_mfa_prepare,
+        "mfa-align": cmd_mfa_align,
+        "mfa-extract": cmd_mfa_extract,
     }
     commands[args.command](args)
 

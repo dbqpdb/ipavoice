@@ -21,7 +21,42 @@ from training.ipa_tokenizer import IPAVocabulary, normalize_ipa
 
 DATA_DIR: Path = Path(__file__).resolve().parent.parent / "data"
 TRAINING_DIR: Path = DATA_DIR / "training"
+TRAINING_CV_DIR: Path = DATA_DIR / "training_cv"
 OUTPUT_DIR: Path = DATA_DIR / "vits_output"
+
+# --- Dataset sources ---
+
+DATASET_UCLA: str = "ucla"
+DATASET_CV: str = "cv"
+DATASET_COMBINED: str = "combined"
+VALID_DATASETS: tuple[str, ...] = (DATASET_UCLA, DATASET_CV, DATASET_COMBINED)
+
+
+def get_training_dir(dataset_source: str) -> Path:
+    """Get the training directory for the specified dataset source.
+
+    Args:
+        dataset_source: One of "ucla", "cv", or "combined".
+
+    Returns:
+        Path to the training directory.
+
+    Raises:
+        ValueError: If dataset_source is not valid.
+    """
+    if dataset_source == DATASET_UCLA:
+        return TRAINING_DIR
+    elif dataset_source == DATASET_CV:
+        return TRAINING_CV_DIR
+    elif dataset_source == DATASET_COMBINED:
+        # Combined mode uses CV directory but would need merged manifests
+        # For now, raise an error as combined mode needs additional implementation
+        raise NotImplementedError(
+            "Combined dataset mode requires merging UCLA and CV manifests. "
+            "Use 'ucla' or 'cv' for now."
+        )
+    else:
+        raise ValueError(f"Invalid dataset_source: {dataset_source}. Must be one of {VALID_DATASETS}")
 
 
 def _build_character_set(vocab_path: Path) -> str:
@@ -60,6 +95,7 @@ def build_config(
     num_loader_workers: int = 4,
     mixed_precision: bool = False,
     use_sdp: bool = True,
+    dataset_source: str = DATASET_UCLA,
 ) -> VitsConfig:
     """Build the VITS training configuration.
 
@@ -74,12 +110,14 @@ def build_config(
         num_loader_workers: DataLoader workers.
         mixed_precision: Enable mixed precision training.
         use_sdp: Use stochastic duration predictor.
+        dataset_source: Dataset to use: "ucla", "cv", or "combined".
 
     Returns:
         Configured VitsConfig ready for training.
     """
-    vocab_path: Path = TRAINING_DIR / "ipa_vocab.json"
-    speakers_path: Path = TRAINING_DIR / "speakers.json"
+    training_dir: Path = get_training_dir(dataset_source)
+    vocab_path: Path = training_dir / "ipa_vocab.json"
+    speakers_path: Path = training_dir / "speakers.json"
 
     if not vocab_path.exists():
         raise FileNotFoundError(f"Vocabulary not found: {vocab_path}. Run preprocessing first.")
@@ -129,7 +167,7 @@ def build_config(
     # Dataset config — coqui formatter: audio_file|text|speaker_name (with header)
     dataset_config: BaseDatasetConfig = BaseDatasetConfig(
         formatter="coqui",
-        path=str(TRAINING_DIR),
+        path=str(training_dir),
         meta_file_train="metadata_train.csv",
         meta_file_val="metadata_val.csv",
     )
@@ -165,6 +203,8 @@ def build_config(
     config.from_dict(config.to_dict())
 
     print(f"VITS config built:")
+    print(f"  Dataset: {dataset_source}")
+    print(f"  Training dir: {training_dir}")
     print(f"  Speakers: {num_speakers}")
     print(f"  Character set size: {len(ipa_chars)}")
     print(f"  Batch size: {batch_size}")

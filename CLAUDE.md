@@ -88,14 +88,64 @@ Four tables with foreign key chain: **languages** → **recordings** → **entri
 
 ## Training
 
-VITS model training uses Coqui TTS. Commands:
+VITS model training uses Coqui TTS. Two dataset sources are supported:
+- **ucla**: Original UCLA Phonetics Archive data (archived, not recommended)
+- **cv**: Common Voice Spontaneous Speech with Allosaurus IPA (recommended)
+
+### Preprocessing
 
 ```bash
-# Resume from highest step checkpoint with mixed precision
-PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True uv run python -m ipavoice.train --resume "$(printf '%s\n' data/vits_output/ipavoice_vits-*/checkpoint_*.pth | sed 's/.*checkpoint_\([0-9]*\)\.pth/\1 &/' | sort -n | tail -1 | cut -d' ' -f2)" --mixed-precision --batch-size 4
+# Preprocess UCLA data (requires prior scraping/downloading)
+uv run python -m scraper.run preprocess --workers 8
+
+# Preprocess Common Voice Spontaneous Speech data
+uv run python -m scraper.run preprocess-cv \
+    --cv-parquet ~/gordo/Corpora/CommonVoiceSpontaneous/data/processed/unified.parquet \
+    --workers 8
+```
+
+CV preprocessing converts MP3 to WAV (22kHz, mono), builds IPA vocabulary from Allosaurus phones, and generates train/val manifests in `data/training_cv/`.
+
+### MFA Alignment (Duration Supervision)
+
+Montreal Forced Aligner extracts phone-level timing from audio, enabling duration supervision during VITS training. MFA requires a separate conda environment due to Kaldi dependencies.
+
+```bash
+# Install MFA (one-time, requires conda)
+conda create -n mfa -c conda-forge montreal-forced-aligner
+
+# Prepare corpus structure (symlinks + phone transcripts)
+uv run python -m scraper.run mfa-prepare --workers 8
+
+# Train acoustic model and generate TextGrids (takes ~1-2 hours for 10K files)
+uv run python -m scraper.run mfa-align
+
+# Extract frame-level durations and update metadata
+uv run python -m scraper.run mfa-extract --workers 8
+```
+
+**Pipeline details:**
+- `mfa-prepare`: Creates `data/mfa/corpus/` with speaker directories, audio symlinks, and space-separated phone transcripts. Also generates identity dictionary (`phone_dict.txt`) where each IPA phone maps to itself.
+- `mfa-align`: Calls MFA via subprocess (conda env). Trains acoustic model on corpus, outputs TextGrid files to `data/mfa/textgrids/`.
+- `mfa-extract`: Parses TextGrids to get phone boundaries, converts to frame counts (at 22kHz, 256 hop), saves to `data/training_cv/durations/`, and adds durations column to metadata CSVs.
+
+### Training
+
+```bash
+# Train on Common Voice data (recommended)
+uv run python -m ipavoice.train --dataset cv --batch-size 4 --mixed-precision
+
+# Train on UCLA data (archived)
+uv run python -m ipavoice.train --dataset ucla --batch-size 4 --mixed-precision
+
+# Resume from highest step checkpoint
+PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True uv run python -m ipavoice.train \
+    --dataset cv \
+    --resume "$(printf '%s\n' data/vits_output/ipavoice_vits-*/checkpoint_*.pth | sed 's/.*checkpoint_\([0-9]*\)\.pth/\1 &/' | sort -n | tail -1 | cut -d' ' -f2)" \
+    --mixed-precision --batch-size 4
 
 # Test run (1000 steps)
-uv run python -m ipavoice.train --test-run
+uv run python -m ipavoice.train --dataset cv --test-run
 ```
 
 **Local GPU (RTX 4080 Laptop, 12GB VRAM):** Use `--batch-size 4` with `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` to avoid OOM. Variable-length audio samples cause memory spikes that crash larger batch sizes.

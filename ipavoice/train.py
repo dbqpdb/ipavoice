@@ -20,7 +20,7 @@ from TTS.tts.utils.speakers import SpeakerManager
 from TTS.tts.utils.text.tokenizer import TTSTokenizer
 from TTS.utils.audio import AudioProcessor
 
-from training.config import OUTPUT_DIR, build_config
+from training.config import DATASET_UCLA, OUTPUT_DIR, VALID_DATASETS, build_config
 
 
 def train(
@@ -30,6 +30,7 @@ def train(
     eval_batch_size: int = 16,
     mixed_precision: bool = False,
     num_loader_workers: int = 4,
+    dataset: str = DATASET_UCLA,
 ) -> None:
     """Run VITS training.
 
@@ -40,6 +41,7 @@ def train(
         eval_batch_size: Evaluation batch size.
         mixed_precision: Enable mixed precision training.
         num_loader_workers: DataLoader workers.
+        dataset: Dataset source to use ("ucla", "cv", or "combined").
     """
     # Build config
     epochs: int = 1 if test_run else 1000
@@ -49,6 +51,7 @@ def train(
         epochs=epochs,
         num_loader_workers=num_loader_workers,
         mixed_precision=mixed_precision,
+        dataset_source=dataset,
     )
 
     if test_run:
@@ -139,6 +142,10 @@ def main() -> None:
         "--workers", type=int, default=4,
         help="DataLoader workers (default: 4)"
     )
+    parser.add_argument(
+        "--dataset", type=str, default=DATASET_UCLA, choices=VALID_DATASETS,
+        help=f"Dataset source: {', '.join(VALID_DATASETS)} (default: {DATASET_UCLA})"
+    )
 
     args: argparse.Namespace = parser.parse_args()
 
@@ -149,6 +156,7 @@ def main() -> None:
         eval_batch_size=args.eval_batch_size,
         mixed_precision=args.mixed_precision,
         num_loader_workers=args.workers,
+        dataset=args.dataset,
     )
 
 
