@@ -20,7 +20,8 @@ from TTS.tts.utils.speakers import SpeakerManager
 from TTS.tts.utils.text.tokenizer import TTSTokenizer
 from TTS.utils.audio import AudioProcessor
 
-from training.config import DATASET_UCLA, OUTPUT_DIR, VALID_DATASETS, build_config
+from training.config import DATASET_UCLA, OUTPUT_DIR, VALID_DATASETS, build_config, get_training_dir
+from training.vits_duration_supervised import VitsDurationSupervised
 
 
 def train(
@@ -31,6 +32,8 @@ def train(
     mixed_precision: bool = False,
     num_loader_workers: int = 4,
     dataset: str = DATASET_UCLA,
+    duration_supervision: bool = False,
+    duration_supervision_alpha: float = 1.0,
 ) -> None:
     """Run VITS training.
 
@@ -42,6 +45,8 @@ def train(
         mixed_precision: Enable mixed precision training.
         num_loader_workers: DataLoader workers.
         dataset: Dataset source to use ("ucla", "cv", or "combined").
+        duration_supervision: Enable MFA duration supervision.
+        duration_supervision_alpha: Weight for duration supervision loss.
     """
     # Build config
     epochs: int = 1 if test_run else 1000
@@ -53,6 +58,14 @@ def train(
         mixed_precision=mixed_precision,
         dataset_source=dataset,
     )
+
+    # Add duration supervision config if enabled
+    if duration_supervision:
+        training_dir = get_training_dir(dataset)
+        config.duration_supervision_alpha = duration_supervision_alpha
+        config.durations_dir = str(training_dir / "durations")
+        print(f"Duration supervision enabled (alpha={duration_supervision_alpha})")
+        print(f"  Durations dir: {config.durations_dir}")
 
     if test_run:
         config.print_step = 10
@@ -90,8 +103,12 @@ def train(
     tokenizer: TTSTokenizer
     tokenizer, config = TTSTokenizer.init_from_config(config)
 
-    # Model
-    model: Vits = Vits(config, ap, tokenizer, speaker_manager)
+    # Model - use duration supervised version if enabled
+    if duration_supervision:
+        model: Vits = VitsDurationSupervised(config, ap, tokenizer, speaker_manager)
+        print(f"Using VitsDurationSupervised model")
+    else:
+        model: Vits = Vits(config, ap, tokenizer, speaker_manager)
 
     # Trainer args
     trainer_args: TrainerArgs = TrainerArgs(
@@ -146,6 +163,14 @@ def main() -> None:
         "--dataset", type=str, default=DATASET_UCLA, choices=VALID_DATASETS,
         help=f"Dataset source: {', '.join(VALID_DATASETS)} (default: {DATASET_UCLA})"
     )
+    parser.add_argument(
+        "--duration-supervision", action="store_true",
+        help="Enable MFA duration supervision (requires mfa-extract to have been run)"
+    )
+    parser.add_argument(
+        "--duration-alpha", type=float, default=1.0,
+        help="Weight for duration supervision loss (default: 1.0)"
+    )
 
     args: argparse.Namespace = parser.parse_args()
 
@@ -157,6 +182,8 @@ def main() -> None:
         mixed_precision=args.mixed_precision,
         num_loader_workers=args.workers,
         dataset=args.dataset,
+        duration_supervision=args.duration_supervision,
+        duration_supervision_alpha=args.duration_alpha,
     )
 
 
