@@ -256,8 +256,8 @@ def save_report(
     report = {
         "timestamp": datetime.now().isoformat(),
         "step": step,
-        "losses": {k: v for k, v in latest.items() if k.startswith("loss_")},
-        "plateau_detected": plateau_detected,
+        "losses": {k: float(v) for k, v in latest.items() if k.startswith("loss_")},
+        "plateau_detected": bool(plateau_detected),
         "samples": [str(p.name) for p in samples],
     }
 
